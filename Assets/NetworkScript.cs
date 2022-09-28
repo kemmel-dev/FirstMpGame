@@ -80,6 +80,12 @@ public class NetworkScript : MonoBehaviour {
         if (Input.GetKeyUp("a")) leftKey = false;
         if (Input.GetKeyDown("d")) rightKey = true;
         if (Input.GetKeyUp("d")) rightKey = false;
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Debug.Log("pressed at " + tick);
+            UpdatePositions(myID);
+        }
     }
 
     void CheckIncomingMessages()
