@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -13,9 +14,9 @@ public class NetworkScript : MonoBehaviour {
 
 
     public PlayerScript[] players = new PlayerScript[2];
-    Sendable sendable = new Sendable();
-    GameSendable handshakeSendable = new GameSendable();
-    GameSendable gameSendable = new GameSendable();
+
+    public int tick = 0;
+    public int clientTickOffset;
 
     void Start() {
         
@@ -63,7 +64,9 @@ public class NetworkScript : MonoBehaviour {
 
         //network stuff:
         CheckIncomingMessages();
-            
+        
+        
+        tick++;
     }
 
     public void Update()
@@ -87,15 +90,15 @@ public class NetworkScript : MonoBehaviour {
         {
             foreach (var json in o)
             {
-                JsonUtility.FromJsonOverwrite(json, sendable);
-
+                ContainerPackage sendable = JsonUtility.FromJson<ContainerPackage>(json);
+                
                 switch (sendable.packageType)
                 {
                     case 0:
-                        HandleIncomingGamePackage(JsonUtility.FromJson<GameSendable>(json));
+                        HandleIncomingGamePackage(JsonUtility.FromJson<PositionPackage>(sendable.packageData));
                         break;
                     case 1:
-                        HandleIncomingHandshake(JsonUtility.FromJson<HandshakeSendable>(json));
+                        HandleIncomingHandshake(JsonUtility.FromJson<HandshakePackage>(sendable.packageData));
                         break;
                     default:
                         break;
@@ -108,12 +111,21 @@ public class NetworkScript : MonoBehaviour {
     /// <summary>
     /// Send handshake data or apply handshake data
     /// </summary>
-    private void HandleIncomingHandshake(HandshakeSendable package)
+    private void HandleIncomingHandshake(HandshakePackage package)
     {
         if (isServer)
         {
-            UpdatePositions(0);
-            UpdatePositions(1);
+            // Determine client tick offset
+            clientTickOffset = tick - package.tick;
+
+            HandshakePackage handshake = new HandshakePackage();
+            handshake.ids = new int[] { 0, 1 };
+            handshake.positions = new Vector2[] { 
+                new Vector2(players[0].transform.position.x, players[0].transform.position.y),
+                new Vector2(players[1].transform.position.x, players[1].transform.position.y)
+            };
+
+            SendPackage(handshake);
         }
         else
         {
@@ -126,31 +138,40 @@ public class NetworkScript : MonoBehaviour {
 
     private void RequestHandshake()
     {
-        SendPackage(new HandshakeSendable());
+        SendPackage(new HandshakePackage());
     }
 
-    private void HandleIncomingGamePackage(GameSendable p)
+    private void HandleIncomingGamePackage(PositionPackage p)
     {
-        int pid = p.id;
-        Vector2 pos = new Vector2(p.x, p.y);
 
-        players[pid].transform.position = pos;
+        if (isServer)
+        {
+            Debug.Log("my tick: " + tick + " their tick: " + p.tick + " with offset: "  + (p.tick + clientTickOffset));
+        }
+        int pid = p.id;
+
+        players[pid].transform.position = p.pos;
     }
 
     private void SendPackage<T>(T package)
     {
-        string json = JsonUtility.ToJson(package);
-        connection.Send(json);
+        ContainerPackage container = package switch
+        {
+            PositionPackage gameSendable => new ContainerPackage(0, JsonUtility.ToJson(package)),
+            HandshakePackage handshakeSendable => new ContainerPackage(1, JsonUtility.ToJson(package)),
+            _ => throw new ArgumentException("Wrong type!")
+        };
+        connection.Send(JsonUtility.ToJson(container));
     }
 
 
     public void UpdatePositions(int id)
     {
         //update sendData-object
-        GameSendable p = new GameSendable();
+        PositionPackage p = new PositionPackage();
+        p.tick = tick;
         p.id = id;
-        p.x = players[id].transform.position.x;
-        p.y = players[id].transform.position.y;
+        p.pos = players[id].transform.position;
 
         SendPackage(p);
 

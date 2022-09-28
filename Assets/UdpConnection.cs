@@ -89,7 +89,7 @@ public class UdpConnection
  
     public void Send(string message)
     {
-        Debug.Log("Sending " + message);
+        //Debug.Log("Sending " + message);
         IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(senderIp), senderPort);
         Byte[] sendBytes = Encoding.UTF8.GetBytes(message);
         udpClient.Send(sendBytes, sendBytes.Length, serverEndpoint);
